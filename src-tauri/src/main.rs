@@ -90,6 +90,15 @@ async fn test_drive_connection(state: tauri::State<'_, State>) -> Result<String,
 }
 
 #[tauri::command]
+async fn check_admin_password(
+    password: String,
+    state: tauri::State<'_, State>,
+) -> Result<bool, String> {
+    let config = state.config.lock().unwrap().clone();
+    Ok(password == config.admin_password)
+}
+
+#[tauri::command]
 async fn test_email(state: tauri::State<'_, State>) -> Result<String, String> {
     let creds = state.creds.lock().unwrap().clone();
     let ecfg = email::EmailConfig {
@@ -250,8 +259,10 @@ async fn background_loop(state: State) {
 
 fn build_tray() -> SystemTray {
     let open = CustomMenuItem::new("open".to_string(), "Open");
+    let setup = CustomMenuItem::new("setup".to_string(), "Setup…");
     let menu = SystemTrayMenu::new()
-        .add_item(open);
+        .add_item(open)
+        .add_item(setup);
     SystemTray::new().with_menu(menu)
 }
 
@@ -260,6 +271,11 @@ fn handle_tray_event(app: &AppHandle, event: SystemTrayEvent) {
         SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
             "open" => {
                 let win = app.get_window("main").unwrap();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+            "setup" => {
+                let win = app.get_window("password").unwrap();
                 let _ = win.show();
                 let _ = win.set_focus();
             }
@@ -332,6 +348,7 @@ fn main() {
             save_setup,
             test_drive_connection,
             test_email,
+            check_admin_password,
         ])
         .on_window_event(|event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {

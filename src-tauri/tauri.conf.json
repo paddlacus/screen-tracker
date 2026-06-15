@@ -53,7 +53,7 @@
       },
       {
         "label": "setup",
-        "title": "Screen Tracker — First Run Setup",
+        "title": "Screen Tracker — Setup",
         "url": "setup.html",
         "width": 520,
         "height": 620,
@@ -63,6 +63,20 @@
         "alwaysOnTop": true,
         "visible": false,
         "skipTaskbar": false,
+        "center": true
+      },
+      {
+        "label": "password",
+        "title": "Screen Tracker — Admin",
+        "url": "password.html",
+        "width": 320,
+        "height": 180,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
         "center": true
       }
     ]

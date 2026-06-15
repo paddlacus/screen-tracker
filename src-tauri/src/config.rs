@@ -39,6 +39,14 @@ pub struct DriveConfig {
 
     /// Hour (24h) at which the daily report email is sent. Default: 23 (11 PM).
     pub daily_report_hour: u32,
+
+    /// Password required to open the Setup screen. Change this in config.json.
+    #[serde(default = "default_admin_password")]
+    pub admin_password: String,
+}
+
+fn default_admin_password() -> String {
+    "admin".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,6 +152,7 @@ impl Default for DriveConfig {
         instructions.insert("overrides".into(), "Date-specific overrides (highest priority). Use 'date' for a single day or 'date_range' for a span. Empty exempt list = limit applies all day.".into());
         instructions.insert("report_email".into(), "Email address that receives warning and daily report emails.".into());
         instructions.insert("daily_report_hour".into(), "Hour (24h, 0-23) when the end-of-day report is sent. Default 23 = 11 PM.".into());
+        instructions.insert("admin_password".into(), "Password required to open the Setup screen. Change this to something only you know.".into());
 
         let mut school_schedule = HashMap::new();
         for day in &["monday", "tuesday", "wednesday", "thursday", "friday"] {
@@ -167,6 +176,7 @@ impl Default for DriveConfig {
             overrides: vec![],
             report_email: String::new(),
             daily_report_hour: 23,
+            admin_password: "admin".into(),
         }
     }
 }
