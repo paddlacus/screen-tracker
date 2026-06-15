@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen Tracker — Setup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      padding: 28px 32px;
+      font-size: 14px;
+    }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: #6e6e73; font-size: 13px; margin-bottom: 24px; }
+
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6e6e73;
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      margin-top: 12px;
+      color: #3a3a3c;
+    }
+    label:first-of-type { margin-top: 0; }
+    label .hint {
+      font-weight: 400;
+      color: #8e8e93;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+
+    input[type="text"], input[type="password"], input[type="email"],
+    input[type="number"], textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    input:focus, textarea:focus {
+      border-color: #0071e3;
+      background: #fff;
+    }
+    textarea { resize: vertical; min-height: 90px; font-family: monospace; font-size: 12px; }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      align-items: center;
+    }
+    button {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+    button.primary { background: #0071e3; color: #fff; }
+    button.secondary { background: #e5e5ea; color: #1d1d1f; }
+    button:disabled { opacity: 0.4; cursor: default; }
+
+    #msg {
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      display: none;
+      margin-top: 12px;
+    }
+    #msg.success { background: #d1f0d4; color: #1a6b1a; display: block; }
+    #msg.error   { background: #fde8e8; color: #8b1a1a; display: block; }
+
+    a.help-link {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #0071e3;
+      text-decoration: none;
+    }
+    a.help-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Screen Tracker Setup</h1>
+  <p class="subtitle">Fill in your credentials. This only needs to be done once per machine.</p>
+
+  <div class="section">
+    <h2>Device</h2>
+    <label>Device name <span class="hint">shown in reports (e.g. "Mac", "Windows")</span></label>
+    <input type="text" id="deviceName" placeholder="e.g. Mac" />
+  </div>
+
+  <div class="section">
+    <h2>Google Drive — Apps Script</h2>
+    <label>Apps Script web app URL <span class="hint">from Deploy → Manage deployments → Web app URL</span></label>
+    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+    <a class="help-link" href="#" onclick="openHelp('drive')">How do I deploy the Apps Script? →</a>
+
+    <label>Script secret <span class="hint">the SECRET string you set inside proxy.gs</span></label>
+    <input type="text" id="scriptSecret" placeholder="my-secret-password" />
+
+    <div class="btn-row">
+      <button class="secondary" onclick="testDrive()" id="testBtn">Test connection</button>
+      <span id="testResult" style="font-size:13px;color:#6e6e73;"></span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Gmail — Report emails</h2>
+    <label>Gmail address <span class="hint">the account that sends the emails</span></label>
+    <input type="email" id="gmailAddress" placeholder="you@gmail.com" />
+
+    <label>App password <span class="hint">16-char password from Google Account → Security → App passwords</span></label>
+    <input type="password" id="gmailAppPassword" placeholder="xxxx xxxx xxxx xxxx" />
+    <a class="help-link" href="#" onclick="openHelp('gmail')">How do I create an App Password? →</a>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="secondary" onclick="testEmail()" id="testEmailBtn">Send test email</button>
+      <span id="testEmailResult" style="font-size:13px;color:#6e6e73;"></span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="primary" onclick="save()" id="saveBtn">Save & close</button>
+    <button class="secondary" onclick="cancel()">Cancel</button>
+  </div>
+  <div id="msg"></div>
+
+  <script type="module">
+    const { invoke } = window.__TAURI__.tauri;
+    const { appWindow } = window.__TAURI__.window;
+
+    // Pre-fill saved values on load
+    invoke('get_status').then(s => {
+      if (s.device_name) document.getElementById('deviceName').value = s.device_name;
+    }).catch(() => {});
+
+    window.testDrive = async () => {
+      const btn = document.getElementById('testBtn');
+      const res = document.getElementById('testResult');
+      // Only save if all fields are filled — never wipe credentials with empty values
+      const url = document.getElementById('scriptUrl').value.trim();
+      const secret = document.getElementById('scriptSecret').value.trim();
+      if (!url || !secret) {
+        res.textContent = '✗ Fill in Script URL and Secret first';
+        res.style.color = '#8b1a1a';
+        return;
+      }
+      btn.disabled = true;
+      res.textContent = 'Testing…';
+      res.style.color = '#6e6e73';
+      try {
+        await saveToBackend(false);
+        const msg = await invoke('test_drive_connection');
+        res.textContent = '✓ ' + msg;
+        res.style.color = '#1a6b1a';
+      } catch (e) {
+        res.textContent = '✗ ' + e;
+        res.style.color = '#8b1a1a';
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    async function saveToBackend(showMsg = true) {
+      const creds = {
+        device_name: document.getElementById('deviceName').value.trim(),
+        script_url: document.getElementById('scriptUrl').value.trim(),
+        script_secret: document.getElementById('scriptSecret').value.trim(),
+        gmail_address: document.getElementById('gmailAddress').value.trim(),
+        gmail_app_password: document.getElementById('gmailAppPassword').value.trim(),
+      };
+      await invoke('save_setup', { credsInput: creds });
+      if (showMsg) {
+        const el = document.getElementById('msg');
+        el.textContent = 'Saved! The app will pick up changes within a few seconds.';
+        el.className = 'success';
+      }
+    }
+
+    window.save = async () => {
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      try {
+        await saveToBackend(true);
+        setTimeout(() => appWindow.hide(), 1200);
+      } catch (e) {
+        const el = document.getElementById('msg');
+        el.textContent = 'Error: ' + e;
+        el.className = 'error';
+        btn.disabled = false;
+      }
+    };
+
+    window.cancel = () => appWindow.hide();
+
+    window.testEmail = async () => {
+      const btn = document.getElementById('testEmailBtn');
+      const res = document.getElementById('testEmailResult');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      res.style.color = '#6e6e73';
+      try {
+        const msg = await invoke('test_email');
+        res.textContent = '✓ ' + msg;
+        res.style.color = '#1a6b1a';
+      } catch (e) {
+        res.textContent = '✗ ' + e;
+        res.style.color = '#8b1a1a';
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    window.openHelp = (type) => {
+      const urls = {
+        drive: 'https://cloud.google.com/iam/docs/creating-managing-service-accounts',
+        gmail: 'https://support.google.com/accounts/answer/185833',
+      };
+      window.__TAURI__.shell.open(urls[type]);
+    };
+  </script>
+</body>
+</html>

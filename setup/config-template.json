@@ -1,0 +1,46 @@
+{
+  "_instructions": {
+    "limit_hours": "Daily screen-time limit in hours. Decimals ok (2.5 = 2h 30m). The warning email fires ONCE per day when this is crossed. The ring in the tray popup shows progress toward this number.",
+    "idle_detection_enabled": "true = minutes with no keyboard/mouse activity are NOT counted. false = any time the screen is on counts (default). Change this in the file to toggle.",
+    "idle_threshold_minutes": "How many consecutive minutes of inactivity = idle. Only matters when idle_detection_enabled is true. Recommended: 5.",
+    "school_schedule": "Default weekly exempt windows. Keys must be lowercase: monday, tuesday, wednesday, thursday, friday, saturday, sunday. Time is 24h format HH:MM. During exempt windows, screen time is NOT counted toward the daily limit. Set a day to an empty list [] for no exemption that day.",
+    "overrides": "Date-specific exceptions — highest priority, overrides school_schedule. Each entry needs a 'label' (your notes), either 'date' (YYYY-MM-DD) OR 'date_range' ({from, to}), and 'exempt' (list of time windows, or [] to remove ALL exemptions for those days). Add a new object to this list for each holiday/break/PD day.",
+    "report_email": "Where the warning and daily report emails are sent. Can be any email address — doesn't have to be the same Gmail used for sending.",
+    "daily_report_hour": "Hour (0-23) when the end-of-day report email is sent. 23 = 11 PM local time on each machine."
+  },
+
+  "limit_hours": 2.5,
+
+  "idle_detection_enabled": false,
+  "idle_threshold_minutes": 5,
+
+  "school_schedule": {
+    "_note": "Remove this _note key when deploying — it's just for your reference.",
+    "monday":    [{"start": "09:00", "end": "15:00"}],
+    "tuesday":   [{"start": "09:00", "end": "15:00"}],
+    "wednesday": [{"start": "09:00", "end": "15:00"}],
+    "thursday":  [{"start": "09:00", "end": "15:00"}],
+    "friday":    [{"start": "09:00", "end": "15:00"}],
+    "saturday":  [],
+    "sunday":    []
+  },
+
+  "overrides": [
+    {
+      "_example_single_day": "Delete this whole block once you understand the format",
+      "label": "PD Day — no school",
+      "date": "2026-09-04",
+      "exempt": []
+    },
+    {
+      "_example_range": "Delete this whole block too",
+      "label": "Winter break",
+      "date_range": {"from": "2026-12-20", "to": "2027-01-04"},
+      "exempt": []
+    }
+  ],
+
+  "report_email": "YOUR_EMAIL@gmail.com",
+
+  "daily_report_hour": 23
+}

@@ -1,0 +1,38 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g @tauri-apps/cli@1
+      - run: cargo tauri build --bundles app
+        working-directory: .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenTracker-Mac
+          path: src-tauri/target/release/bundle/macos/*.app
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g @tauri-apps/cli@1
+      - run: cargo tauri build
+        working-directory: .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenTracker-Windows
+          path: src-tauri/target/release/bundle/msi/*.msi

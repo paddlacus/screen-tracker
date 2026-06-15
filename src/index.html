@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      width: 340px;
+      height: 480px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid #2a2a4a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 15px; font-weight: 600; color: #fff; }
+    header .device { font-size: 12px; color: #888; }
+
+    .ring-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 20px 20px;
+    }
+    .ring-wrap { position: relative; width: 140px; height: 140px; }
+    svg.ring { transform: rotate(-90deg); }
+    circle.bg { fill: none; stroke: #2a2a4a; stroke-width: 12; }
+    circle.progress {
+      fill: none;
+      stroke-width: 12;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s ease, stroke 0.4s;
+    }
+    .ring-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .ring-label .time { font-size: 26px; font-weight: 700; color: #fff; }
+    .ring-label .sub  { font-size: 11px; color: #888; margin-top: 2px; }
+
+    .status-pill {
+      margin-top: 12px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .pill-exempt  { background: #1a3a1a; color: #5cb85c; }
+    .pill-active  { background: #1a1a3a; color: #5b9bd5; }
+    .pill-over    { background: #3a1a1a; color: #e05c5c; }
+
+    .stats {
+      padding: 0 20px;
+      flex: 1;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a2a4a;
+      font-size: 13px;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: #888; }
+    .stat-value { color: #ddd; font-weight: 500; }
+
+    footer {
+      padding: 12px 20px;
+      border-top: 1px solid #2a2a4a;
+      text-align: center;
+    }
+    footer .date { font-size: 11px; color: #555; }
+
+    .setup-banner {
+      margin: 12px 20px;
+      padding: 10px 14px;
+      background: #2a1a00;
+      border: 1px solid #6a4000;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #f0a040;
+      cursor: pointer;
+    }
+    .setup-banner:hover { background: #3a2800; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Screen Tracker</h1>
+    <span class="device" id="deviceName">—</span>
+  </header>
+
+  <div id="setupBanner" class="setup-banner" style="display:none" onclick="openSetup()">
+    ⚙️ Setup required — click to configure
+  </div>
+
+  <div class="ring-section">
+    <div class="ring-wrap">
+      <svg class="ring" width="140" height="140" viewBox="0 0 140 140">
+        <circle class="bg" cx="70" cy="70" r="58"/>
+        <circle class="progress" id="progressRing" cx="70" cy="70" r="58"
+          stroke-dasharray="364.4"
+          stroke-dashoffset="364.4"
+          stroke="#5b9bd5"/>
+      </svg>
+      <div class="ring-label">
+        <span class="time" id="usedTime">0m</span>
+        <span class="sub" id="limitLabel">of 2h 30m</span>
+      </div>
+    </div>
+    <span class="status-pill pill-active" id="statusPill">tracking</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat-row">
+      <span class="stat-label">Remaining today</span>
+      <span class="stat-value" id="remaining">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">School-hours (exempt)</span>
+      <span class="stat-value" id="exemptStatus">—</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Idle detection</span>
+      <span class="stat-value" id="idleStatus">off</span>
+    </div>
+  </div>
+
+  <footer>
+    <span class="date" id="dateLabel">—</span>
+  </footer>
+
+  <script type="module">
+    const { invoke } = window.__TAURI__.tauri;
+    const { appWindow } = window.__TAURI__.window;
+
+    function fmtMins(mins) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}m`;
+    }
+
+    async function refresh() {
+      try {
+        const s = await invoke('get_status');
+
+        document.getElementById('deviceName').textContent = s.device_name || '—';
+        document.getElementById('dateLabel').textContent = s.date;
+        document.getElementById('setupBanner').style.display = s.is_setup_complete ? 'none' : 'block';
+
+        const used = s.used_minutes;
+        const limit = s.limit_minutes;
+        const pct = Math.min(used / limit, 1);
+        const circumference = 364.4;
+        const ring = document.getElementById('progressRing');
+        ring.style.strokeDashoffset = circumference * (1 - pct);
+
+        const over = used >= limit;
+        ring.style.stroke = s.is_exempt ? '#5cb85c' : over ? '#e05c5c' : '#5b9bd5';
+
+        document.getElementById('usedTime').textContent = fmtMins(used);
+        document.getElementById('limitLabel').textContent = `of ${fmtMins(limit)}`;
+
+        const remaining = Math.max(limit - used, 0);
+        document.getElementById('remaining').textContent = s.is_exempt
+          ? 'exempt (school hours)'
+          : over ? 'limit reached' : fmtMins(remaining);
+
+        const pill = document.getElementById('statusPill');
+        if (s.is_exempt) {
+          pill.textContent = 'school hours — unlimited';
+          pill.className = 'status-pill pill-exempt';
+        } else if (over) {
+          pill.textContent = 'limit reached';
+          pill.className = 'status-pill pill-over';
+        } else {
+          pill.textContent = 'tracking';
+          pill.className = 'status-pill pill-active';
+        }
+
+        document.getElementById('exemptStatus').textContent = s.is_exempt ? 'active now' : 'not active';
+        document.getElementById('idleStatus').textContent = s.idle_detection_enabled ? 'on (5 min)' : 'off';
+
+      } catch (e) {
+        console.error('get_status error:', e);
+      }
+    }
+
+    function openSetup() {
+      const { WebviewWindow } = window.__TAURI__.window;
+      // The setup window is already defined in tauri.conf.json
+      appWindow.emit('open-setup');
+    }
+
+    refresh();
+    setInterval(refresh, 30_000);
+
+    // Close popup when focus is lost (click outside)
+    window.addEventListener('blur', () => {
+      setTimeout(() => appWindow.hide(), 150);
+    });
+  </script>
+</body>
+</html>
