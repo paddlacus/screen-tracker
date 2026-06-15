@@ -145,77 +145,13 @@ async fn background_loop(state: State) {
             }
         }
 
-        // ── Gather data for emails (all in one scope, lock dropped before await) ──
-        let (warn_needed, warn_summary, report_needed, report_summary) = {
+        // ── Check report time (needs db lock, dropped before await) ─────
+        let report_needed = {
             let db = state.db.lock().unwrap();
-            let used = storage::get_today_limited_minutes(&db).unwrap_or(0);
-            let limit = config.limit_minutes() as i64;
-
-            let already_sent = storage::was_warning_sent_today(&db).unwrap_or(true);
-            let warn_needed = !is_exempt && used >= limit && !already_sent;
-            eprintln!("[tick {tick}] warn check: is_exempt={is_exempt} used={used} limit={limit} already_sent={already_sent} warn_needed={warn_needed}");
-            let warn_summary = if warn_needed {
-                Some(storage::today_summary(&db, &creds.device_name).unwrap_or_default())
-            } else {
-                None
-            };
-
             let now = Local::now();
-            let report_needed = now.hour() == config.daily_report_hour
-                && !storage::was_report_sent_today(&db).unwrap_or(true);
-            let report_summary = if report_needed {
-                Some(storage::today_summary(&db, &creds.device_name).unwrap_or_default())
-            } else {
-                None
-            };
-
-            (warn_needed, warn_summary, report_needed, report_summary)
-        }; // db lock released here — safe to await below
-
-        // ── Warning email ─────────────────────────────────────────────────
-        if warn_needed {
-            if let Some(summary) = warn_summary {
-                let recipient = if config.report_email.is_empty() {
-                    creds.gmail_address.clone()
-                } else {
-                    config.report_email.clone()
-                };
-                let ecfg = email::EmailConfig {
-                    gmail_address: creds.gmail_address.clone(),
-                    gmail_app_password: creds.gmail_app_password.clone(),
-                    recipient,
-                };
-                eprintln!("[email] sending warning to {}", ecfg.recipient);
-                match email::send_warning_email(&ecfg, &summary, config.limit_hours).await {
-                    Ok(_) => {
-                        eprintln!("[email] warning sent ok");
-                        let db = state.db.lock().unwrap();
-                        let _ = storage::mark_warning_sent(&db);
-                    }
-                    Err(e) => eprintln!("[email] warning failed: {e}"),
-                }
-            }
-        }
-
-        // ── Daily report email ────────────────────────────────────────────
-        if report_needed {
-            if let Some(summary) = report_summary {
-                let recipient = if config.report_email.is_empty() {
-                    creds.gmail_address.clone()
-                } else {
-                    config.report_email.clone()
-                };
-                let ecfg = email::EmailConfig {
-                    gmail_address: creds.gmail_address.clone(),
-                    gmail_app_password: creds.gmail_app_password.clone(),
-                    recipient,
-                };
-                if email::send_daily_report(&ecfg, &[summary], config.limit_hours).await.is_ok() {
-                    let db = state.db.lock().unwrap();
-                    let _ = storage::mark_report_sent(&db);
-                }
-            }
-        }
+            now.hour() == config.daily_report_hour
+                && !storage::was_report_sent_today(&db).unwrap_or(true)
+        };
 
         // ── Drive sync: push data every 2 min, pull config every 60 min ─
         if tick % 2 == 0 {
@@ -233,6 +169,70 @@ async fn background_loop(state: State) {
                     &json,
                 )
                 .await;
+            }
+
+            // ── Warning: check combined total across all devices ──────────
+            if !is_exempt {
+                let limit = config.limit_minutes() as i64;
+                match drive::fetch_combined_today_minutes(&creds.script_url, &creds.script_secret).await {
+                    Ok(combined) => {
+                        eprintln!("[tick {tick}] combined={combined} limit={limit}");
+                        if combined >= limit {
+                            let today = Local::now().format("%Y-%m-%d").to_string();
+                            let flag = format!("warning_sent_{today}.flag");
+                            if !drive::check_flag(&creds.script_url, &creds.script_secret, &flag).await {
+                                let _ = drive::set_flag(&creds.script_url, &creds.script_secret, &flag).await;
+                                let summary = {
+                                    let db = state.db.lock().unwrap();
+                                    storage::today_summary(&db, &creds.device_name).unwrap_or_default()
+                                };
+                                let recipient = if config.report_email.is_empty() {
+                                    creds.gmail_address.clone()
+                                } else {
+                                    config.report_email.clone()
+                                };
+                                let ecfg = email::EmailConfig {
+                                    gmail_address: creds.gmail_address.clone(),
+                                    gmail_app_password: creds.gmail_app_password.clone(),
+                                    recipient,
+                                };
+                                eprintln!("[email] sending combined warning to {}", ecfg.recipient);
+                                match email::send_warning_email(&ecfg, &summary, config.limit_hours).await {
+                                    Ok(_) => eprintln!("[email] warning sent ok"),
+                                    Err(e) => eprintln!("[email] warning failed: {e}"),
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("[tick {tick}] combined fetch error: {e}"),
+                }
+            }
+        }
+
+        // ── Daily report email ────────────────────────────────────────────
+        if report_needed {
+            let today = Local::now().format("%Y-%m-%d").to_string();
+            let report_flag = format!("report_sent_{today}.flag");
+            if !drive::check_flag(&creds.script_url, &creds.script_secret, &report_flag).await {
+                let _ = drive::set_flag(&creds.script_url, &creds.script_secret, &report_flag).await;
+                let local_summary = {
+                    let db = state.db.lock().unwrap();
+                    storage::today_summary(&db, &creds.device_name).unwrap_or_default()
+                };
+                let recipient = if config.report_email.is_empty() {
+                    creds.gmail_address.clone()
+                } else {
+                    config.report_email.clone()
+                };
+                let ecfg = email::EmailConfig {
+                    gmail_address: creds.gmail_address.clone(),
+                    gmail_app_password: creds.gmail_app_password.clone(),
+                    recipient,
+                };
+                if email::send_daily_report(&ecfg, &[local_summary], config.limit_hours).await.is_ok() {
+                    let db = state.db.lock().unwrap();
+                    let _ = storage::mark_report_sent(&db);
+                }
             }
         }
 

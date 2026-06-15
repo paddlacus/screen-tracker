@@ -42,7 +42,7 @@ function doPost(e) {
   }
 }
 
-// ── Read a file (GET) ─────────────────────────────────────────────────────────
+// ── Read a file or list files (GET) ──────────────────────────────────────────
 
 function doGet(e) {
   try {
@@ -52,8 +52,17 @@ function doGet(e) {
     }
 
     const folder = DriveApp.getFolderById(FOLDER_ID);
-    const iter   = folder.getFilesByName(p.filename);
 
+    // List all filenames in the folder
+    if (p.action === "list") {
+      const files = [];
+      const iter = folder.getFiles();
+      while (iter.hasNext()) files.push(iter.next().getName());
+      return json({ ok: true, files });
+    }
+
+    // Download a specific file
+    const iter = folder.getFilesByName(p.filename);
     if (!iter.hasNext()) {
       return json({ ok: false, error: "not_found" });
     }

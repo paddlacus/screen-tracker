@@ -118,27 +118,6 @@ pub fn get_today_limited_minutes(conn: &Connection) -> Result<i64> {
     Ok(minutes)
 }
 
-pub fn was_warning_sent_today(conn: &Connection) -> Result<bool> {
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    let sent = conn
-        .query_row(
-            "SELECT warning_sent FROM daily_meta WHERE date = ?1",
-            params![today],
-            |r| r.get::<_, i64>(0),
-        )
-        .unwrap_or(0);
-    Ok(sent == 1)
-}
-
-pub fn mark_warning_sent(conn: &Connection) -> Result<()> {
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    conn.execute(
-        "INSERT INTO daily_meta (date, warning_sent) VALUES (?1, 1)
-         ON CONFLICT(date) DO UPDATE SET warning_sent = 1",
-        params![today],
-    )?;
-    Ok(())
-}
 
 pub fn was_report_sent_today(conn: &Connection) -> Result<bool> {
     let today = Local::now().format("%Y-%m-%d").to_string();

@@ -87,6 +87,64 @@ pub async fn push_daily_summary(
     upload_file(script_url, secret, &filename, summary_json).await
 }
 
+/// List all filenames in the Drive folder.
+pub async fn list_files(script_url: &str, secret: &str) -> Result<Vec<String>> {
+    let client = Client::new();
+    let resp: Value = client
+        .get(script_url)
+        .query(&[("secret", secret), ("action", "list")])
+        .send()
+        .await
+        .map_err(|e| anyhow!("Network error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| anyhow!("Response parse error: {e}"))?;
+
+    if resp["ok"].as_bool() != Some(true) {
+        return Err(anyhow!("Script error"));
+    }
+    Ok(resp["files"]
+        .as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+        .collect())
+}
+
+/// Fetch combined limited_minutes from all devices for today.
+pub async fn fetch_combined_today_minutes(script_url: &str, secret: &str) -> Result<i64> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let files = list_files(script_url, secret).await?;
+    let today_files: Vec<String> = files
+        .into_iter()
+        .filter(|f| f.ends_with(&format!("_{today}.json")) && f != "config.json")
+        .collect();
+
+    let mut total: i64 = 0;
+    for filename in today_files {
+        if let Ok(Some(text)) = download_file(script_url, secret, &filename).await {
+            if let Ok(summary) = serde_json::from_str::<crate::storage::DailySummary>(&text) {
+                total += summary.limited_minutes;
+            }
+        }
+    }
+    Ok(total)
+}
+
+/// Check if a named flag file exists on Drive.
+pub async fn check_flag(script_url: &str, secret: &str, flag: &str) -> bool {
+    download_file(script_url, secret, flag)
+        .await
+        .ok()
+        .flatten()
+        .is_some()
+}
+
+/// Create a named flag file on Drive.
+pub async fn set_flag(script_url: &str, secret: &str, flag: &str) -> Result<()> {
+    upload_file(script_url, secret, flag, "1").await
+}
+
 /// Write the default config.json if it doesn't exist or is empty.
 pub async fn ensure_config_exists(
     script_url: &str,
