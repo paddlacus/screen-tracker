@@ -250,10 +250,8 @@ async fn background_loop(state: State) {
 
 fn build_tray() -> SystemTray {
     let open = CustomMenuItem::new("open".to_string(), "Open");
-    let setup = CustomMenuItem::new("setup".to_string(), "Setup…");
     let menu = SystemTrayMenu::new()
-        .add_item(open)
-        .add_item(setup);
+        .add_item(open);
     SystemTray::new().with_menu(menu)
 }
 
@@ -262,11 +260,6 @@ fn handle_tray_event(app: &AppHandle, event: SystemTrayEvent) {
         SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
             "open" => {
                 let win = app.get_window("main").unwrap();
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
-            "setup" => {
-                let win = app.get_window("setup").unwrap();
                 let _ = win.show();
                 let _ = win.set_focus();
             }
