@@ -101,7 +101,7 @@ pub fn today_summary(conn: &Connection, device_name: &str) -> Result<DailySummar
         device_name: device_name.to_string(),
         total_minutes: total,
         exempt_minutes: exempt,
-        limited_minutes: total,
+        limited_minutes: total - exempt,
         app_breakdown,
     })
 }
@@ -110,7 +110,7 @@ pub fn get_today_limited_minutes(conn: &Connection) -> Result<i64> {
     let today = Local::now().format("%Y-%m-%d").to_string();
     let minutes = conn
         .query_row(
-            "SELECT total_minutes FROM daily_meta WHERE date = ?1",
+            "SELECT total_minutes - exempt_minutes FROM daily_meta WHERE date = ?1",
             params![today],
             |r| r.get::<_, i64>(0),
         )
