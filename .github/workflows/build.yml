@@ -10,12 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
       - run: cargo install tauri-cli --version "^1.6" --locked
-      - run: cargo tauri build --bundles app
+      - run: cargo tauri build --bundles app --target universal-apple-darwin
       - uses: actions/upload-artifact@v4
         with:
           name: ScreenTracker-Mac
-          path: src-tauri/target/release/bundle/macos/*.app
+          path: src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
 
   build-windows:
     runs-on: windows-latest
